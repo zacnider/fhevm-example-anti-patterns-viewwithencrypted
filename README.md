@@ -235,7 +235,7 @@ npx hardhat test
 
 ### Option 1: Frontend (Recommended)
 
-1. Navigate to [Examples page](/examples)
+1. Navigate to [Examples page](https://entrofhe.vercel.app/examples)
 2. Find "EntropyViewWithEncrypted" in Tutorial Examples
 3. Click **"Deploy"** button
 4. Approve transaction in wallet
@@ -376,7 +376,7 @@ npx hardhat verify --network sepolia <CONTRACT_ADDRESS> 0x75b923d7940E1BD6689EbF
 
 - [Full Tutorial Track Documentation](../../../frontend/src/pages/Docs.tsx) - Complete educational guide
 - [Zama FHEVM Documentation](https://docs.zama.org/) - Official FHEVM docs
-- [GitHub Repository](https://github.com/zacnider/entrofhe/tree/main/examples/anti-patterns-viewwithencrypted) - Source code
+- [GitHub Repository](https://github.com/zacnider/fhevm-example-anti-patterns-viewwithencrypted) - Source code
 
 ## 📝 License
 
