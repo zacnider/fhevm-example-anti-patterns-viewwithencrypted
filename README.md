@@ -1,6 +1,10 @@
-# EntropyOracle
+# EntropyViewWithEncrypted
 
-Main oracle contract for entropy requests - Developer-friendly interface
+Learn how to encrypt a single value using FHE.fromExternal
+
+## 🎓 What You'll Learn
+
+This example teaches you how to use FHEVM to build privacy-preserving smart contracts. You'll learn step-by-step how to implement encrypted operations, manage permissions, and work with encrypted data.
 
 ## 🚀 Quick Start
 
@@ -48,57 +52,62 @@ Main oracle contract for entropy requests - Developer-friendly interface
 
 ---
 
-## 📋 Overview
+## 📚 Overview
 
-@title EntropyOracle
-@notice Main oracle contract for entropy requests - Developer-friendly interface
-@dev Developers call requestEntropy() with 0.00001 ETH fee
+This example teaches you how to use FHEVM to build privacy-preserving smart contracts.
 
-@notice Deploy EntropyOracle
-@param _chaosEngine Address of FHEChaosEngine contract
-@param _feeRecipient Address to receive fees
-@param initialOwner Initial owner address
+@title EntropyViewWithEncrypted
+@notice View functions with encrypted values and encrypted randomness (not allowed)
+@dev ANTI-PATTERN: This demonstrates what NOT to do with encrypted randomness
+⚠️ ANTI-PATTERN WARNING:
+View functions cannot return encrypted values (euint64) directly.
+FHE operations are considered state-modifying, so they cannot be in view functions.
+encrypted randomness operations also cannot be in view functions.
+Common Mistakes:
+1. Trying to return euint64 from view functions
+2. Using FHE operations in view functions
+3. Trying to get entropy from encrypted randomness in view functions
+4. Expecting encrypted values to work in pure/view contexts
+Correct Approach:
+- Use regular functions (not view) to return encrypted values
+- Or return the encrypted value handle as bytes/string
+- Or use events to emit encrypted values
 
-@notice Request entropy - Main function for developers
-@param tag Unique tag for this request (e.g., keccak256("lottery-draw"))
-@return requestId Unique request ID
-@dev Requires exactly 0.00001 ETH fee
+@notice Constructor - sets encrypted randomness address
+@param _encrypted randomness Address of encrypted randomness contract
 
-@notice Get encrypted entropy for a request
-@param requestId Request ID returned from requestEntropy
-@return entropy Encrypted entropy (euint64)
+@notice Request entropy
+@param tag Unique tag for this request
+@return requestId Request ID from encrypted randomness
 
-@notice Check if request is fulfilled
-@param requestId Request ID
-@return fulfilled True if entropy is ready
+@notice Initialize encrypted value
+@param encryptedInput Encrypted value
+@param inputProof Input proof
 
-@notice Get request details
-@param requestId Request ID
-@return consumer Consumer address
-@return tag Request tag
-@return timestamp Request timestamp
-@return fulfilled Fulfillment status
+❌ ANTI-PATTERN: View function returning encrypted value
+@dev This will NOT compile - view functions cannot return euint64
+@dev FHE operations are state-modifying, so they can't be in view functions
+Error you'll get:
+"Function cannot be declared as view because this expression (potentially) modifies the state."
 
-@notice Get current fee amount
-@return fee Fee in wei (0.00001 ETH = 10000000000000 wei)
+✅ CORRECT: Regular function (not view) to return encrypted value
+@return Encrypted value
 
-@notice Update fee recipient (owner only)
-@param newRecipient New fee recipient address
+❌ ANTI-PATTERN: View function trying to get entropy
+@dev This will NOT compile - view functions cannot call encrypted randomness
 
-@notice Update chaos engine (owner only, emergency use)
-@param newEngine New chaos engine address
+✅ ALTERNATIVE: Return as bytes (if you need view-like behavior)
+@dev You can return the handle as bytes, but this loses FHE capabilities
 
-@notice Emergency withdraw (owner only)
-@param to Recipient address
-@param amount Amount to withdraw
+@notice Get encrypted randomness address
 
 
 
-## 🔐 Zama FHEVM Usage
+## 🔐 Learn Zama FHEVM Through This Example
 
-This example demonstrates the following **Zama FHEVM** features:
+This example teaches you how to use the following **Zama FHEVM** features:
 
-### Zama FHEVM Features Used
+### What You'll Learn About
 
 - **ZamaEthereumConfig**: Inherits from Zama's network configuration
   ```solidity
@@ -149,13 +158,13 @@ euint64 result = FHE.add(encryptedValue, FHE.asEuint64(1));
 FHE.allowThis(result);
 ```
 
-### Zama FHEVM Concepts Demonstrated
+### FHEVM Concepts You'll Learn
 
-1. **Encrypted Arithmetic**: Using Zama FHEVM to encrypted arithmetic
-2. **Encrypted Comparison**: Using Zama FHEVM to encrypted comparison
-3. **External Encryption**: Using Zama FHEVM to external encryption
-4. **Permission Management**: Using Zama FHEVM to permission management
-5. **Entropy Integration**: Using Zama FHEVM to entropy integration
+1. **Encrypted Arithmetic**: Learn how to use Zama FHEVM for encrypted arithmetic
+2. **Encrypted Comparison**: Learn how to use Zama FHEVM for encrypted comparison
+3. **External Encryption**: Learn how to use Zama FHEVM for external encryption
+4. **Permission Management**: Learn how to use Zama FHEVM for permission management
+5. **Entropy Integration**: Learn how to use Zama FHEVM for entropy integration
 
 ### Learn More About Zama FHEVM
 
@@ -164,262 +173,147 @@ FHE.allowThis(result);
 - 💻 [Zama FHEVM GitHub](https://github.com/zama-ai/fhevm)
 
 
+
 ## 🔍 Contract Code
 
 ```solidity
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.27;
 
-import {FHE, euint64} from "@fhevm/solidity/lib/FHE.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {FHE, euint64, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import "./IEntropyOracle.sol";
-import "./FHEChaosEngine.sol";
 
 /**
- * @title EntropyOracle
- * @notice Main oracle contract for entropy requests - Developer-friendly interface
- * @dev Developers call requestEntropy() with 0.00001 ETH fee
+ * @title EntropyViewWithEncrypted
+ * @notice View functions with encrypted values and EntropyOracle (not allowed)
+ * @dev ANTI-PATTERN: This demonstrates what NOT to do with EntropyOracle
+ * 
+ * ⚠️ ANTI-PATTERN WARNING:
+ * 
+ * View functions cannot return encrypted values (euint64) directly.
+ * FHE operations are considered state-modifying, so they cannot be in view functions.
+ * EntropyOracle operations also cannot be in view functions.
+ * 
+ * Common Mistakes:
+ * 1. Trying to return euint64 from view functions
+ * 2. Using FHE operations in view functions
+ * 3. Trying to get entropy from EntropyOracle in view functions
+ * 4. Expecting encrypted values to work in pure/view contexts
+ * 
+ * Correct Approach:
+ * - Use regular functions (not view) to return encrypted values
+ * - Or return the encrypted value handle as bytes/string
+ * - Or use events to emit encrypted values
  */
-contract EntropyOracle is IEntropyOracle, Ownable, ReentrancyGuard {
-    // ============ Constants ============
+contract EntropyViewWithEncrypted is ZamaEthereumConfig {
+    // Entropy Oracle interface
+    IEntropyOracle public entropyOracle;
     
-    /// @notice Fee per entropy request: 0.00001 ETH = 10000000000000 wei
-    uint256 public constant FEE_AMOUNT = 0.00001 ether; // 10000000000000 wei
+    euint64 private encryptedValue;
+    bool private initialized;
     
-    // ============ State Variables ============
+    // Track entropy requests
+    mapping(uint256 => bool) public entropyRequests;
     
-    /// @notice Core chaos engine
-    FHEChaosEngine public chaosEngine;
-    
-    /// @notice Fee recipient address
-    address public feeRecipient;
-    
-    /// @notice Request counter
-    uint256 private requestCounter;
-    
-    /// @notice Request structure
-    struct EntropyRequest {
-        address consumer;
-        bytes32 tag;
-        euint64 encryptedEntropy;
-        uint256 timestamp;
-        bool fulfilled;
-    }
-    
-    /// @notice Mapping of request ID to request
-    mapping(uint256 => EntropyRequest) public requests;
-    
-    // ============ Events ============
-    
-    event EntropyRequested(
-        uint256 indexed requestId,
-        bytes32 indexed hashedConsumer, // Hashed consumer address for privacy
-        bytes32 hashedTag,              // Hashed tag for privacy
-        uint256 feePaid
-    );
-    
-    event EntropyFulfilled(
-        uint256 indexed requestId,
-        bytes32 indexed hashedConsumer, // Hashed consumer address for privacy
-        bytes32 hashedTag               // Hashed tag for privacy
-    );
-    
-    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
-    event ChaosEngineUpdated(address indexed oldEngine, address indexed newEngine);
-    
-    // ============ Errors ============
-    
-    error InsufficientFee(uint256 required, uint256 provided);
-    error ChaosEngineNotSet();
-    error RequestNotFulfilled(uint256 requestId);
-    error InvalidAddress();
-    
-    // ============ Constructor ============
+    event EntropyRequested(uint256 indexed requestId, address indexed caller);
     
     /**
-     * @notice Deploy EntropyOracle
-     * @param _chaosEngine Address of FHEChaosEngine contract
-     * @param _feeRecipient Address to receive fees
-     * @param initialOwner Initial owner address
+     * @notice Constructor - sets EntropyOracle address
+     * @param _entropyOracle Address of EntropyOracle contract
      */
-    constructor(
-        address _chaosEngine,
-        address _feeRecipient,
-        address initialOwner
-    ) Ownable(initialOwner) {
-        if (_chaosEngine == address(0)) revert InvalidAddress();
-        if (_feeRecipient == address(0)) revert InvalidAddress();
-        
-        chaosEngine = FHEChaosEngine(_chaosEngine);
-        feeRecipient = _feeRecipient;
-        requestCounter = 0;
+    constructor(address _entropyOracle) {
+        require(_entropyOracle != address(0), "Invalid oracle address");
+        entropyOracle = IEntropyOracle(_entropyOracle);
     }
     
-    // ============ Main Function (Developer Interface) ============
-    
     /**
-     * @notice Request entropy - Main function for developers
-     * @param tag Unique tag for this request (e.g., keccak256("lottery-draw"))
-     * @return requestId Unique request ID
-     * @dev Requires exactly 0.00001 ETH fee
+     * @notice Request entropy
+     * @param tag Unique tag for this request
+     * @return requestId Request ID from EntropyOracle
      */
-    function requestEntropy(bytes32 tag) 
-        external 
-        payable 
-        nonReentrant 
-        returns (uint256 requestId) 
-    {
-        // Check fee
-        if (msg.value < FEE_AMOUNT) {
-            revert InsufficientFee(FEE_AMOUNT, msg.value);
-        }
-        
-        // Increment request counter
-        requestCounter++;
-        requestId = requestCounter;
-        
-        // Generate entropy using chaos engine
-        // Pass requestId for seed consistency
-        euint64 entropy = chaosEngine.generateEntropy(tag, msg.sender, requestId);
-        
-        // Store request
-        requests[requestId] = EntropyRequest({
-            consumer: msg.sender,
-            tag: tag,
-            encryptedEntropy: entropy,
-            timestamp: block.timestamp,
-            fulfilled: true
-        });
-        
-        // Transfer fee to recipient
-        if (feeRecipient != address(0)) {
-            (bool success, ) = payable(feeRecipient).call{value: msg.value}("");
-            require(success, "Fee transfer failed");
-        }
-        
-        // Hash sensitive data for privacy in events
-        // Consumer: hash address for privacy
-        bytes32 hashedConsumer = keccak256(abi.encodePacked(msg.sender));
-        
-        // Tag: hash the tag for privacy
-        bytes32 hashedTag = keccak256(abi.encodePacked(tag));
-        
-        emit EntropyRequested(requestId, hashedConsumer, hashedTag, msg.value);
-        emit EntropyFulfilled(requestId, hashedConsumer, hashedTag);
-        
+    function requestEntropy(bytes32 tag) external payable returns (uint256 requestId) {
+        require(msg.value >= entropyOracle.getFee(), "Insufficient fee");
+        requestId = entropyOracle.requestEntropy{value: msg.value}(tag);
+        entropyRequests[requestId] = true;
+        emit EntropyRequested(requestId, msg.sender);
         return requestId;
     }
     
-    // ============ View Functions ============
-    
     /**
-     * @notice Get encrypted entropy for a request
-     * @param requestId Request ID returned from requestEntropy
-     * @return entropy Encrypted entropy (euint64)
+     * @notice Initialize encrypted value
+     * @param encryptedInput Encrypted value
+     * @param inputProof Input proof
      */
-    function getEncryptedEntropy(uint256 requestId) 
-        external 
-        view 
-        returns (euint64) 
-    {
-        if (!requests[requestId].fulfilled) {
-            revert RequestNotFulfilled(requestId);
-        }
-        return requests[requestId].encryptedEntropy;
-    }
-    
-    /**
-     * @notice Check if request is fulfilled
-     * @param requestId Request ID
-     * @return fulfilled True if entropy is ready
-     */
-    function isRequestFulfilled(uint256 requestId) 
-        external 
-        view 
-        returns (bool) 
-    {
-        return requests[requestId].fulfilled;
-    }
-    
-    /**
-     * @notice Get request details
-     * @param requestId Request ID
-     * @return consumer Consumer address
-     * @return tag Request tag
-     * @return timestamp Request timestamp
-     * @return fulfilled Fulfillment status
-     */
-    function getRequest(uint256 requestId) 
-        external 
-        view 
-        returns (
-            address consumer,
-            bytes32 tag,
-            uint256 timestamp,
-            bool fulfilled
-        ) 
-    {
-        EntropyRequest memory request = requests[requestId];
-        return (
-            request.consumer,
-            request.tag,
-            request.timestamp,
-            request.fulfilled
-        );
-    }
-    
-    /**
-     * @notice Get current fee amount
-     * @return fee Fee in wei (0.00001 ETH = 10000000000000 wei)
-     */
-    function getFee() external pure returns (uint256) {
-        return FEE_AMOUNT;
-    }
-    
-    // ============ Admin Functions ============
-    
-    /**
-     * @notice Update fee recipient (owner only)
-     * @param newRecipient New fee recipient address
-     */
-    function setFeeRecipient(address newRecipient) external onlyOwner {
-        if (newRecipient == address(0)) revert InvalidAddress();
+    function initialize(
+        externalEuint64 encryptedInput,
+        bytes calldata inputProof
+    ) external {
+        require(!initialized, "Already initialized");
         
-        address oldRecipient = feeRecipient;
-        feeRecipient = newRecipient;
+        euint64 internalValue = FHE.fromExternal(encryptedInput, inputProof);
+        FHE.allowThis(internalValue);
         
-        emit FeeRecipientUpdated(oldRecipient, newRecipient);
+        encryptedValue = internalValue;
+        initialized = true;
     }
     
     /**
-     * @notice Update chaos engine (owner only, emergency use)
-     * @param newEngine New chaos engine address
+     * ❌ ANTI-PATTERN: View function returning encrypted value
+     * @dev This will NOT compile - view functions cannot return euint64
+     * @dev FHE operations are state-modifying, so they can't be in view functions
+     * 
+     * Error you'll get:
+     * "Function cannot be declared as view because this expression (potentially) modifies the state."
      */
-    function setChaosEngine(address newEngine) external onlyOwner {
-        if (newEngine == address(0)) revert InvalidAddress();
-        
-        address oldEngine = address(chaosEngine);
-        chaosEngine = FHEChaosEngine(newEngine);
-        
-        emit ChaosEngineUpdated(oldEngine, newEngine);
+    // function getValue() external view returns (euint64) {
+    //     return encryptedValue; // ❌ This won't work!
+    // }
+    
+    /**
+     * ✅ CORRECT: Regular function (not view) to return encrypted value
+     * @return Encrypted value
+     */
+    function getValue() external returns (euint64) {
+        require(initialized, "Not initialized");
+        return encryptedValue; // ✅ This works!
     }
     
     /**
-     * @notice Emergency withdraw (owner only)
-     * @param to Recipient address
-     * @param amount Amount to withdraw
+     * ❌ ANTI-PATTERN: View function trying to get entropy
+     * @dev This will NOT compile - view functions cannot call EntropyOracle
      */
-    function emergencyWithdraw(address to, uint256 amount) external onlyOwner {
-        if (to == address(0)) revert InvalidAddress();
-        (bool success, ) = payable(to).call{value: amount}("");
-        require(success, "Withdraw failed");
+    // function getEntropyInView(uint256 requestId) external view returns (euint64) {
+    //     // ❌ This won't work! EntropyOracle.getEncryptedEntropy() is not view
+    //     return entropyOracle.getEncryptedEntropy(requestId);
+    // }
+    
+    /**
+     * ✅ ALTERNATIVE: Return as bytes (if you need view-like behavior)
+     * @dev You can return the handle as bytes, but this loses FHE capabilities
+     */
+    // function getValueAsBytes() external view returns (bytes memory) {
+    //     // Convert handle to bytes (loses FHE capabilities)
+    //     // This is a workaround, but not recommended
+    // }
+    
+    /**
+     * @notice Get EntropyOracle address
+     */
+    function getEntropyOracle() external view returns (address) {
+        return address(entropyOracle);
     }
 }
 
-
 ```
 
+## 🧪 Tests
+
+See [test file](./test/EntropyViewWithEncrypted.test.ts) for comprehensive test coverage.
+
+```bash
+npm test
+```
 
 
 ## 📚 Category
